@@ -1,2 +1,3 @@
+
 # ohbot-go
-Ohbot control library for gaoling
+Ohbot control library for golang
