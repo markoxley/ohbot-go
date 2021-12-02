@@ -1,34 +1,44 @@
 package ohbot
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/beevik/etree"
 )
 
-type Motor struct {
-	Pos, Min, Max, Rest float64
-	Rev, Attached       bool
-	Type                string
+// motor is a struct to hold details for a specified servo
+type motor struct {
+	pos, min, max, rest float64
+	rev, attached       bool
+	mType               string
+	idx                 int
 }
 
-func NewMotor() *Motor {
-	return &Motor{
-		Pos:      11,
-		Min:      0,
-		Max:      0,
-		Rest:     0,
-		Rev:      false,
-		Attached: false,
-		Type:     "",
+var (
+	motors            []*motor
+	ohbotMotorDefFile string
+)
+
+// newMotor creates a new Motor object with default settings
+func newMotor() *motor {
+	return &motor{
+		pos:      11,
+		min:      0,
+		max:      0,
+		rest:     0,
+		rev:      false,
+		attached: false,
+		mType:    "",
+		idx:      0,
 	}
 }
 
-func loadMotorDefs() {
+func loadMotorDefs() error {
 	tree := etree.NewDocument()
 	if err := tree.ReadFromFile(ohbotMotorDefFile); err != nil {
-		log.Fatalf("Unable to read motor definitions file: %s", err.Error())
+		return errors.New(fmt.Sprintf("Unable to read motor definitions file: %s", err.Error()))
 	}
 
 	root := tree.SelectElement("Motors")
@@ -36,26 +46,49 @@ func loadMotorDefs() {
 		indexStr := element.SelectAttrValue("Motor", "")
 		index, err := strconv.Atoi(indexStr)
 		if err != nil {
-			log.Fatal("Error reading motor min def")
+			return errors.New(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
 		}
 		min, err := strconv.ParseFloat(element.SelectAttrValue("Min", ""), 64)
 		if err != nil {
-			log.Fatalf("Error reading motor min def: %s", err.Error())
+			return errors.New(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
 		}
 		max, err := strconv.ParseFloat(element.SelectAttrValue("Max", ""), 64)
 		if err != nil {
-			log.Fatalf("Error reading motor max def: %s", err.Error())
+			return errors.New(fmt.Sprintf("Error reading motor max def: %s", err.Error()))
 		}
 		rest, err := strconv.ParseFloat(element.SelectAttrValue("RestPosition", ""), 64)
 		if err != nil {
-			log.Fatalf("Error reading motor rest def: %s", err.Error())
+			return errors.New(fmt.Sprintf("Error reading motor rest def: %s", err.Error()))
 		}
 		rev := element.SelectAttrValue("Reverse", "") == "True"
 
-		motors[index].Min = min / 1000 * 180
-		motors[index].Max = max / 1000 * 180
-		motors[index].Rest = rest
-		motors[index].Pos = rest
-		motors[index].Rev = rev
+		motors[index].min = min / 1000 * 180
+		motors[index].max = max / 1000 * 180
+		motors[index].rest = rest
+		motors[index].pos = rest
+		motors[index].rev = rev
+		motors[index].idx = index
 	}
+	return nil
+}
+
+func (m *motor) attach() {
+	if m.attached {
+		return
+	}
+	msg := fmt.Sprintf("a0%s\n", m.idx)
+	serWrite(msg)
+	m.attached = true
+}
+
+func (m *motor) detach() {
+	msg := fmt.Sprintf("d0%s\n", m.idx)
+	serWrite(msg)
+	m.attached = false
+}
+
+func (m *motor) absPos(p float64) float64 {
+	mr := m.max - m.min
+	sp := (mr / 10) * p
+	return sp + m.min
 }

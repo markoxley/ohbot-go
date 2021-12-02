@@ -2,24 +2,17 @@ package ohbot
 
 import (
 	"errors"
-	"log"
-	"os"
-
-	"github.com/beevik/etree"
+	"fmt"
+	"github.com/huin/goserial"
+	"os/exec"
+	"strings"
 )
 
-const (
-	Version         = "1.0.0"
-	dirName         = "ohbotData"
-	speechAudioFile = "ohbotData/ohbotspeech.wav"
-
-	soundFolder  = "ohbotData/Sounds"
-	settingsFile = "ohbotData/OhbotSettings.xml"
-)
+type MotorName uint8
 
 // Constants for motors
 const (
-	HeadNod uint8 = iota
+	HeadNod MotorName = iota
 	HeadTurn
 	EyeTurn
 	LidBlink
@@ -28,118 +21,175 @@ const (
 	EyeTilt
 )
 
-var (
-	sensors            []float64
-	motors             []*Motor
-	shapeList          []float64
-	phraseList         []float64
-	port               string
-	writing            bool
-	connected          bool
-	topLipFree         bool
-	speechDatabaseFile string
-	ohbotMotorDefFile  string
-	defaultEyeShape    string
-	eyeShapeFile       string
-	synthesizer        string
-	voice              string
-	language           string
-	speechRate         float64
-	lastfex, lastfey   float64
-)
-
-func init() {
-	language = "en-GB"
-	ohbotMotorDefFile = "ohbotData/MotorDefinitionsv21.omd"
-	sensors = []float64{0, 0, 0, 0, 0, 0, 0, 0}
-	for i := uint8(0); i <= EyeTilt; i++ {
-		motors = append(motors, NewMotor())
-	}
-	writing = false
-	connected = false
-	topLipFree = false
-
-	err := os.Mkdir(dirName, os.ModePerm)
-	if err != nil && !os.IsExist(err) {
-		log.Fatalf("Unable to create directory. %s", err.Error())
-	}
-
-	if err = testFile(settingsFile, xmlDefault); err != nil {
-		log.Fatalf("Unable to create default XML file. %s", err.Error())
-	}
-
-	if err = loadSettings(); err != nil {
-		log.Fatalf("Unable to load settings. %s", err.Error())
-	}
-
-	if err = testFile(speechDatabaseFile, speechDef); err != nil {
-		log.Fatalf("Unable to create speech database file. %s", err.Error())
-	}
-
-	if err = testFile(eyeShapeFile, eyeDef); err != nil {
-		log.Fatalf("Unable to create eye shape file. %s", err.Error())
-	}
-
-	if err = testFile(ohbotMotorDefFile, motorDef); err != nil {
-		log.Fatalf("Unable to create ohbot motor definition file. %s", err.Error())
-	}
-
-	// Maybe add sound option here
-
-	if synthesizer == "" {
-		synthesizer = "festival"
-	}
-
-	speechRate = 170
-
-	lastfex = 5
-	lastfey = 5
+func Version() string {
+	return version
 }
 
-func loadSettings() error {
-	tree := etree.NewDocument()
-	if err := tree.ReadFromFile(settingsFile); err != nil {
-		return errors.New("unable to read settings file.")
-	}
-
-	root := tree.SelectElement("SettingList")
-	for _, element := range root.SelectElements("Setting") {
-		value := element.SelectAttrValue("Value", "")
-		switch element.SelectAttrValue("Name", "") {
-		case "DefaultEyeShape":
-			defaultEyeShape = value
-		case "DefaultSpeechSynth":
-			synthesizer = value
-		case "DefaultVoice":
-			voice = value
-		case "DefaultLang":
-			language = value
-		case "SpeechDBFile":
-			speechDatabaseFile = value
-		case "EyeShapeList":
-			eyeShapeFile = value
-		case "MotorDefFile":
-			ohbotMotorDefFile = value
-		}
-	}
-	return nil
-}
-
-func testFile(fp, cnt string) error {
-	_, err := os.Stat(fp)
-	if err != nil && !os.IsNotExist(err) {
+// Init initialises Ohbot on the specified port.
+// If an empty string is passed, the function will
+// attempt to find the port that is attached to Ohbot
+func Init(portName string) error {
+	if err := loadMotorDefs(); err != nil {
 		return err
 	}
-	if err == nil {
-		return nil
+	silenceFile = dirName + "/Silence1.wav"
+	if err := PlaySoundFile(silenceFile); err != nil {
+		return err
 	}
 
-	file, err := os.Create(fp)
+	ports, err := listSerialPorts()
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	file.WriteString(cnt)
-	return nil
 
+	if portName == "" {
+		for _, p := range ports {
+			if CheckPort(p) {
+				port = p
+				connected = true
+				break
+			}
+		}
+		if port == "" {
+			return errors.New("unable to find Ohbot port")
+		}
+	} else {
+		if !CheckPort(portName) {
+			return errors.New(fmt.Sprintf("unable to find Ohbot on port %s", portName))
+		}
+		connected = true
+		port = portName
+	}
+
+	c := &goserial.Config{
+		Name: port,
+		Baud: 19200,
+	}
+	ser, err = goserial.OpenPort(c)
+	if err != nil {
+		return err
+	}
+
+	text := "Hi"
+	if strings.ToLower(synthesizer) == "festival" {
+		generateSpeechFile(text)
+	}
+
+	loadSpeechDatabase()
+	return nil
+}
+
+func CheckPort(p string) bool {
+	c := &goserial.Config{
+		Name: p,
+		Baud: 19200,
+	}
+	ser, err := goserial.OpenPort(c)
+	if err != nil {
+		return false
+	}
+	defer ser.Close()
+
+	msg := "v\n"
+	_, err = ser.Write([]byte(msg))
+	if err != nil {
+		return false
+	}
+	buf := make([]byte, 256)
+	n, err := ser.Read(buf)
+	if err != nil {
+		return false
+	}
+	line := string(buf[:n])
+	return strings.Contains(line, "v1")
+}
+
+func PlaySoundFile(fp string) error {
+	cmd := exec.Command("aplay", fp)
+	return cmd.Run()
+}
+
+func Move(mn MotorName, pos float64, spd float64) {
+	pos = limit(pos)
+	spd = limit(spd)
+
+	if pos > 9 && mn == BottomLip {
+		topLipFree = true
+	}
+
+	if pos <= 5 && mn == BottomLip {
+		topLipFree = false
+	}
+
+	if pos < 5 && mn == BottomLip {
+		pos = 5 - ((5 - pos) / 2)
+	}
+
+	m := motors[int(mn)]
+	if m.rev {
+		pos = 10 - pos
+	}
+
+	m.attach()
+	absPos := m.absPos(m.pos)
+	spd = (250 / 10) * spd
+	msg := fmt.Sprintf("m0%v,%v,%v\n", mn, absPos, spd)
+	serWrite(msg)
+
+	m.pos = pos
+}
+
+func Attach(mn MotorName) {
+	motors[int(mn)].attach()
+}
+
+func Detach(mn MotorName) {
+	motors[int(mn)].detach()
+}
+
+func SetLanguage(l string) {
+	if l == "" {
+		return
+	}
+	voice = l
+}
+
+func SetSynthesizer(s string) {
+	if s == "" {
+		return
+	}
+	synthesizer = s
+}
+
+func SetSpeechSpeed(sr float64) {
+	if sr <= 0 {
+		return
+	}
+	speechRate = sr
+}
+
+func SayWithConfig(sc *SpeechConfig) {
+	text := strings.TrimSpace(sc.Text)
+	if text == "" {
+		return
+	}
+	text = strings.ReplaceAll(text, "picoh", "peek oh")
+	text = strings.ReplaceAll(text, "Picoh", "peek oh")
+
+	soundDelay := sc.SoundDelay
+	if sc.HDMIAudo {
+		soundDelay--
+	}
+
+	generateSpeechFile(text)
+}
+
+func Say(t string) {
+	SayWithConfig(&SpeechConfig{
+		Text:       t,
+		UntilDone:  true,
+		LipSync:    true,
+		HDMIAudo:   false,
+		SoundDelay: 0,
+	})
 }
