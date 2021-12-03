@@ -87,8 +87,8 @@ func (m *motor) detach() {
 	m.attached = false
 }
 
-func (m *motor) absPos(p float64) float64 {
+func (m *motor) absPos(p float64) uint16 {
 	mr := m.max - m.min
 	sp := (mr / 10) * p
-	return sp + m.min
+	return uint16(sp + m.min)
 }
