@@ -1,20 +1,19 @@
 package ohbot
 
 import (
-	"errors"
-	"github.com/beevik/etree"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"strconv"
+	"strings"
+
+	"github.com/beevik/etree"
 )
 
 const (
-	version         = "1.0.0"
-	dirName         = "ohbotData"
-	speechAudioFile = "ohbotData/ohbotspeech.wav"
-	soundFolder     = "ohbotData/Sounds"
-	settingsFile    = "ohbotData/OhbotSettings.xml"
+	version = "1.0.0"
+	dirName = "ohbotData"
 )
 
 var (
@@ -31,24 +30,46 @@ var (
 	speechRate       float64
 	lastfex, lastfey float64
 	ser              io.ReadWriteCloser
+	workingDir       string
+	speechAudioPath  string
+	settingsPath     string
+	phonemesPath     string
+	pathSep          string
+	speechAudioFile  string
+	soundFolder      string
+	settingsFile     string
+	phonemesFile     string
 )
 
 func init() {
 	language = "en-GB"
 	ohbotMotorDefFile = "ohbotData/MotorDefinitionsv21.omd"
 	sensors = []float64{0, 0, 0, 0, 0, 0, 0, 0}
-	for i := uint8(0); i <= uint8(EyeTilt); i++ {
+	for i := uint8(0); i <= uint8(MouthOpen); i++ {
 		motors = append(motors, newMotor())
 	}
 	writing = false
 	connected = false
 	topLipFree = false
-
-	err := os.Mkdir(dirName, os.ModePerm)
+	workingDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Unable to determine working directory: %s", err.Error())
+	}
+	pathSep = string(os.PathSeparator)
+	if !strings.HasSuffix(workingDir, pathSep) {
+		workingDir += pathSep
+	}
+	//workingDir += dirName
+	err = os.Mkdir(workingDir, os.ModePerm)
 	if err != nil && !os.IsExist(err) {
 		log.Fatalf("Unable to create directory. %s", err.Error())
 	}
 
+	speechAudioFile = workingDir + "ohbotspeech.wav"
+	soundFolder = workingDir + "Sounds"
+	settingsFile = workingDir + "OhbotSettings.xml"
+	phonemesFile = workingDir + "phonemes"
+	//settingsFile = workingDir + settingsFile
 	if err = testFile(settingsFile, settingsDef); err != nil {
 		log.Fatalf("Unable to create default XML file. %s", err.Error())
 	}
@@ -103,7 +124,7 @@ func isDigit(s string) bool {
 func loadSettings() error {
 	tree := etree.NewDocument()
 	if err := tree.ReadFromFile(settingsFile); err != nil {
-		return errors.New("unable to read settings file.")
+		return fmt.Errorf("unable to read settings file: %s", err.Error())
 	}
 
 	root := tree.SelectElement("SettingList")
@@ -117,9 +138,9 @@ func loadSettings() error {
 		case "DefaultLang":
 			language = value
 		case "SpeechDBFile":
-			speechDatabaseFile = value
+			speechDatabaseFile = workingDir + value
 		case "MotorDefFile":
-			ohbotMotorDefFile = value
+			ohbotMotorDefFile = workingDir + value
 		}
 	}
 	return nil
@@ -136,8 +157,11 @@ func listSerialPorts() ([]string, error) {
 		if d.IsDir() {
 			continue
 		}
-		if d.Name()[:3] == "tty" {
-			res = append(res, d.Name())
+		if len(d.Name()) < 6 {
+			continue
+		}
+		if d.Name()[:4] == "ttyA" {
+			res = append(res, "/dev/"+d.Name())
 		}
 	}
 	return res, nil

@@ -1,8 +1,8 @@
 package ohbot
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/beevik/etree"
@@ -38,7 +38,7 @@ func newMotor() *motor {
 func loadMotorDefs() error {
 	tree := etree.NewDocument()
 	if err := tree.ReadFromFile(ohbotMotorDefFile); err != nil {
-		return errors.New(fmt.Sprintf("Unable to read motor definitions file: %s", err.Error()))
+		return fmt.Errorf(fmt.Sprintf("Unable to read motor definitions file: %s", err.Error()))
 	}
 
 	root := tree.SelectElement("Motors")
@@ -46,19 +46,19 @@ func loadMotorDefs() error {
 		indexStr := element.SelectAttrValue("Motor", "")
 		index, err := strconv.Atoi(indexStr)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
+			return fmt.Errorf(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
 		}
 		min, err := strconv.ParseFloat(element.SelectAttrValue("Min", ""), 64)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
+			return fmt.Errorf(fmt.Sprintf("Error reading motor min def: %s", err.Error()))
 		}
 		max, err := strconv.ParseFloat(element.SelectAttrValue("Max", ""), 64)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error reading motor max def: %s", err.Error()))
+			return fmt.Errorf(fmt.Sprintf("Error reading motor max def: %s", err.Error()))
 		}
 		rest, err := strconv.ParseFloat(element.SelectAttrValue("RestPosition", ""), 64)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error reading motor rest def: %s", err.Error()))
+			return fmt.Errorf(fmt.Sprintf("Error reading motor rest def: %s", err.Error()))
 		}
 		rev := element.SelectAttrValue("Reverse", "") == "True"
 
@@ -69,6 +69,7 @@ func loadMotorDefs() error {
 		motors[index].rev = rev
 		motors[index].idx = index
 	}
+	log.Println("Motor defs loaded")
 	return nil
 }
 
@@ -76,13 +77,13 @@ func (m *motor) attach() {
 	if m.attached {
 		return
 	}
-	msg := fmt.Sprintf("a0%s\n", m.idx)
+	msg := fmt.Sprintf("a0%d\n", m.idx)
 	serWrite(msg)
 	m.attached = true
 }
 
 func (m *motor) detach() {
-	msg := fmt.Sprintf("d0%s\n", m.idx)
+	msg := fmt.Sprintf("d0%d\n", m.idx)
 	serWrite(msg)
 	m.attached = false
 }
@@ -90,5 +91,6 @@ func (m *motor) detach() {
 func (m *motor) absPos(p float64) uint16 {
 	mr := m.max - m.min
 	sp := (mr / 10) * p
+	log.Printf("p = %f, m.max = %f, m.min = %f, mr = %f, s = %f, r = %f", p, m.max, m.min, mr, sp, (sp + m.min))
 	return uint16(sp + m.min)
 }

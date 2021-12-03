@@ -3,9 +3,11 @@ package ohbot
 import (
 	"errors"
 	"fmt"
-	"github.com/huin/goserial"
+	"log"
 	"os/exec"
 	"strings"
+
+	"github.com/huin/goserial"
 )
 
 type MotorName uint8
@@ -19,6 +21,7 @@ const (
 	TopLip
 	BottomLip
 	EyeTilt
+	MouthOpen
 )
 
 func Version() string {
@@ -33,15 +36,14 @@ func Init(portName string) error {
 		return err
 	}
 	silenceFile = dirName + "/Silence1.wav"
-	if err := PlaySoundFile(silenceFile); err != nil {
-		return err
-	}
+	// if err := PlaySoundFile(silenceFile); err != nil {
+	// 	return err
+	// }
 
 	ports, err := listSerialPorts()
 	if err != nil {
 		return err
 	}
-
 	if portName == "" {
 		for _, p := range ports {
 			if CheckPort(p) {
@@ -55,7 +57,7 @@ func Init(portName string) error {
 		}
 	} else {
 		if !CheckPort(portName) {
-			return errors.New(fmt.Sprintf("unable to find Ohbot on port %s", portName))
+			return fmt.Errorf("unable to find Ohbot on port %s", portName)
 		}
 		connected = true
 		port = portName
@@ -69,7 +71,7 @@ func Init(portName string) error {
 	if err != nil {
 		return err
 	}
-
+	log.Printf("Ohbot found on %v", port)
 	text := "Hi"
 	if strings.ToLower(synthesizer) == "festival" {
 		generateSpeechFile(text)
@@ -131,9 +133,11 @@ func Move(mn MotorName, pos float64, spd float64) {
 	}
 
 	m.attach()
-	absPos := m.absPos(m.pos)
-	spd = (250 / 10) * spd
+	absPos := m.absPos(pos)
+	log.Printf("Absolute Angle: %v\n", absPos)
+	spd = float64(250/10) * spd
 	msg := fmt.Sprintf("m0%v,%v,%v\n", mn, absPos, spd)
+	log.Printf("Msg: %v\n", msg)
 	serWrite(msg)
 
 	m.pos = pos
@@ -168,28 +172,43 @@ func SetSpeechSpeed(sr float64) {
 	speechRate = sr
 }
 
-func SayWithConfig(sc *SpeechConfig) {
-	text := strings.TrimSpace(sc.Text)
+func Say(text string, sc *SpeechConfig) {
+	log.Printf("Text: %s", text)
+	text = strings.TrimSpace(text)
 	if text == "" {
 		return
 	}
 	text = strings.ReplaceAll(text, "picoh", "peek oh")
 	text = strings.ReplaceAll(text, "Picoh", "peek oh")
 
-	soundDelay := sc.SoundDelay
-	if sc.HDMIAudo {
-		soundDelay--
-	}
+	// if sc != nil {
+	// 	sc = NewSpeechConfig()
+	// }
+	// soundDelay := sc.SoundDelay
+	// if sc.HDMIAudo {
+	// 	soundDelay--
+	// }
 
 	generateSpeechFile(text)
-}
 
-func Say(t string) {
-	SayWithConfig(&SpeechConfig{
-		Text:       t,
-		UntilDone:  true,
-		LipSync:    true,
-		HDMIAudo:   false,
-		SoundDelay: 0,
-	})
+	// if strings.ToUpper(synthesizer) == "FESTIVAL" {
+	// 	f, err := os.Open(phonemesFile)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	defer f.Close()
+	// 	phonemes := make([]string, 0)
+	// 	times := make([]float64, 0)
+	// 	vals := make([]string, 0)
+
+	// 	b := bufio.NewReader(f)
+	// 	for {
+	// 		line, err := b.ReadBytes('\n')
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 		vals = strings.Split(string(line),"")
+	// 		if len(vals) >
+	// 	}
+	// }
 }
