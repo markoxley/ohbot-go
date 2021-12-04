@@ -12,7 +12,6 @@ import (
 
 type MotorName uint8
 
-// Constants for motors
 const (
 	HeadNod MotorName = iota
 	HeadTurn
@@ -24,6 +23,8 @@ const (
 	MouthOpen
 )
 
+// Version returns the version of the module
+//  @return string
 func Version() string {
 	return version
 }
@@ -31,6 +32,8 @@ func Version() string {
 // Init initialises Ohbot on the specified port.
 // If an empty string is passed, the function will
 // attempt to find the port that is attached to Ohbot
+//  @param portName is the name of the port to be used. If unknown, pass an empty string
+//  @return error
 func Init(portName string) error {
 	if err := loadMotorDefs(); err != nil {
 		return err
@@ -81,6 +84,9 @@ func Init(portName string) error {
 	return nil
 }
 
+// CheckPort checks the specified port for the existance of Ohbot
+//  @param p is the port
+//  @return bool
 func CheckPort(p string) bool {
 	c := &goserial.Config{
 		Name: p,
@@ -106,11 +112,18 @@ func CheckPort(p string) bool {
 	return strings.Contains(line, "v1")
 }
 
+// PlaySoundFile makes Ohbot play a sound file
+//  @param fp the filepath of the sound file
+//  @return error
 func PlaySoundFile(fp string) error {
 	cmd := exec.Command("aplay", fp)
 	return cmd.Run()
 }
 
+// Move moves the specified servo
+//  @param mn is the name of the servo
+//  @param pos is the position to move the servo to 1 - 10
+//  @param spd is the speed to move the servo 1 - 10
 func Move(mn MotorName, pos float64, spd float64) {
 	pos = limit(pos)
 	spd = limit(spd)
@@ -143,14 +156,20 @@ func Move(mn MotorName, pos float64, spd float64) {
 	m.pos = pos
 }
 
+// Attach attaches the specified server
+//  @param mn is the name of the servo
 func Attach(mn MotorName) {
 	motors[int(mn)].attach()
 }
 
+// Detach detaches the servo
+//  @param mn is the name of the servo to detach
 func Detach(mn MotorName) {
 	motors[int(mn)].detach()
 }
 
+// SetLanguage sets the language for the voice
+//  @param l is the language
 func SetLanguage(l string) {
 	if l == "" {
 		return
@@ -158,6 +177,8 @@ func SetLanguage(l string) {
 	voice = l
 }
 
+// SetSynthesizer sets a synthisizer for speech
+//  @param s is the name of the synthesizer
 func SetSynthesizer(s string) {
 	if s == "" {
 		return
@@ -165,6 +186,8 @@ func SetSynthesizer(s string) {
 	synthesizer = s
 }
 
+// SetSpeechSpeed sets the speed of the speech
+//  @param sr is the new speech rate
 func SetSpeechSpeed(sr float64) {
 	if sr <= 0 {
 		return
@@ -172,6 +195,9 @@ func SetSpeechSpeed(sr float64) {
 	speechRate = sr
 }
 
+// Say
+//  @param text
+//  @param sc
 func Say(text string, sc *SpeechConfig) {
 	log.Printf("Text: %s", text)
 	text = strings.TrimSpace(text)
