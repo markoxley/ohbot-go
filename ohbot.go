@@ -1,11 +1,16 @@
 package ohbot
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	"log"
+	"io"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/huin/goserial"
 )
@@ -35,14 +40,13 @@ func Version() string {
 //  @param portName is the name of the port to be used. If unknown, pass an empty string
 //  @return error
 func Init(portName string) error {
+
+	// Load the motor definitions
 	if err := loadMotorDefs(); err != nil {
 		return err
 	}
-	silenceFile = dirName + "/Silence1.wav"
-	// if err := PlaySoundFile(silenceFile); err != nil {
-	// 	return err
-	// }
 
+	// Find the port for Ohbot
 	ports, err := listSerialPorts()
 	if err != nil {
 		return err
@@ -74,13 +78,10 @@ func Init(portName string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Ohbot found on %v", port)
-	text := "Hi"
-	if strings.ToLower(synthesizer) == "festival" {
-		generateSpeechFile(text)
-	}
 
+	// Load the speech database
 	loadSpeechDatabase()
+
 	return nil
 }
 
@@ -117,17 +118,25 @@ func CheckPort(p string) bool {
 //  @return error
 func PlaySoundFile(fp string) error {
 	cmd := exec.Command("aplay", fp)
-	return cmd.Run()
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	return cmd.Wait()
 }
 
 // Move moves the specified servo
 //  @param mn is the name of the servo
-//  @param pos is the position to move the servo to 1 - 10
-//  @param spd is the speed to move the servo 1 - 10
-func Move(mn MotorName, pos float64, spd float64) {
-	pos = limit(pos)
-	spd = limit(spd)
-
+//  @param val values for the turn. First value is position, second value is speed
+func Move(mn MotorName, val ...float64) {
+	pos := float64(5)
+	spd := float64(5)
+	if len(val) > 0 {
+		pos = limit(val[0])
+	}
+	if len(val) > 1 {
+		spd = limit(val[1], 1, 10)
+	}
 	if pos > 9 && mn == BottomLip {
 		topLipFree = true
 	}
@@ -147,10 +156,8 @@ func Move(mn MotorName, pos float64, spd float64) {
 
 	m.attach()
 	absPos := m.absPos(pos)
-	log.Printf("Absolute Angle: %v\n", absPos)
 	spd = float64(250/10) * spd
 	msg := fmt.Sprintf("m0%v,%v,%v\n", mn, absPos, spd)
-	log.Printf("Msg: %v\n", msg)
 	serWrite(msg)
 
 	m.pos = pos
@@ -168,38 +175,10 @@ func Detach(mn MotorName) {
 	motors[int(mn)].detach()
 }
 
-// SetLanguage sets the language for the voice
-//  @param l is the language
-func SetLanguage(l string) {
-	if l == "" {
-		return
-	}
-	voice = l
-}
-
-// SetSynthesizer sets a synthisizer for speech
-//  @param s is the name of the synthesizer
-func SetSynthesizer(s string) {
-	if s == "" {
-		return
-	}
-	synthesizer = s
-}
-
-// SetSpeechSpeed sets the speed of the speech
-//  @param sr is the new speech rate
-func SetSpeechSpeed(sr float64) {
-	if sr <= 0 {
-		return
-	}
-	speechRate = sr
-}
-
-// Say
-//  @param text
-//  @param sc
+// Say speaks the selected text
+//  @param text is the text to speak
+//  @param sc optional additional configuration
 func Say(text string, sc *SpeechConfig) {
-	log.Printf("Text: %s", text)
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return
@@ -207,34 +186,148 @@ func Say(text string, sc *SpeechConfig) {
 	text = strings.ReplaceAll(text, "picoh", "peek oh")
 	text = strings.ReplaceAll(text, "Picoh", "peek oh")
 
-	// if sc != nil {
-	// 	sc = NewSpeechConfig()
-	// }
-	// soundDelay := sc.SoundDelay
-	// if sc.HDMIAudo {
-	// 	soundDelay--
-	// }
-
+	if sc == nil {
+		sc = NewSpeechConfig()
+	}
 	generateSpeechFile(text)
 
-	// if strings.ToUpper(synthesizer) == "FESTIVAL" {
-	// 	f, err := os.Open(phonemesFile)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// 	defer f.Close()
-	// 	phonemes := make([]string, 0)
-	// 	times := make([]float64, 0)
-	// 	vals := make([]string, 0)
+	f, err := os.Open(phonemesFile)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	phonemes := make([]string, 0)
+	times := make([]float64, 0)
 
-	// 	b := bufio.NewReader(f)
-	// 	for {
-	// 		line, err := b.ReadBytes('\n')
-	// 		if err != nil {
-	// 			return
-	// 		}
-	// 		vals = strings.Split(string(line),"")
-	// 		if len(vals) >
-	// 	}
-	// }
+	b := bufio.NewReader(f)
+	for {
+		line, err := b.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return
+		}
+		vals := strings.Split(string(line), " ")
+		if len(vals) < 3 {
+			continue
+		}
+
+		pt, err := strconv.ParseFloat(vals[0], 64)
+		if err != nil {
+			continue
+		}
+		phonemes = append(phonemes, vals[2])
+		times = append(times, pt)
+	}
+
+	var wg *sync.WaitGroup
+	if sc.UntilDone {
+		wg = &sync.WaitGroup{}
+	}
+	if sc.LipSync {
+		if sc.SoundDelay > 0 {
+			if wg != nil {
+				wg.Add(1)
+			}
+			go func() {
+				time.Sleep(time.Second * time.Duration(sc.SoundDelay))
+				playSpeech()
+				if wg != nil {
+					wg.Done()
+				}
+			}()
+		} else {
+
+			if wg != nil {
+				wg.Add(2)
+			}
+			go func() {
+				playSpeech()
+				if wg != nil {
+					wg.Done()
+				}
+			}()
+			//time.Sleep(time.Second * time.Duration(sc.SoundDelay))
+			go func() {
+
+				moveSpeech(phonemes, times)
+				if wg != nil {
+					wg.Done()
+				}
+			}()
+		}
+	} else {
+		if wg != nil {
+			wg.Add(1)
+		}
+		go func() {
+			playSpeech()
+			if wg != nil {
+				wg.Done()
+			}
+		}()
+	}
+	if wg != nil {
+		wg.Wait()
+	}
+}
+
+// Reset sets all the servos to default position and closes the connection
+func Reset() {
+	for _, m := range motors {
+		if m.idx == int(TopLip) || m.idx == int(BottomLip) {
+			continue
+		}
+		Move(MotorName(m.idx), 5)
+		time.Sleep(time.Millisecond * 250)
+	}
+	Move(MotorName(TopLip), 5)
+	Move(MotorName(BottomLip), 5)
+	time.Sleep(time.Millisecond * 250)
+	Close()
+}
+
+// Close detaches all the servos
+func Close() {
+	for _, m := range motors {
+		m.detach()
+	}
+}
+
+func Wait(s float64) {
+	time.Sleep(time.Millisecond * time.Duration(s*1000))
+}
+
+func ReadSensor(idx int) (float64, error) {
+	msg := fmt.Sprintf("i0%d\n", idx)
+	_, err := ser.Write([]byte(msg))
+	if err != nil {
+		return -1, err
+	}
+	buf := make([]byte, 256)
+	n, err := ser.Read(buf)
+	if err != nil {
+		return -1, err
+	}
+	line := string(buf[:n])
+	lines := strings.Split(line, ",")
+	if len(lines) > 1 {
+		indexIn := lines[0]
+		indexIn = string(indexIn[1])
+		intdex, err := strconv.Atoi(indexIn)
+		if err != nil {
+			return -1, err
+		}
+		newVal, err := strconv.Atoi(lines[1])
+		if err != nil {
+			return -1, err
+		}
+		sensors[intdex] = limit(float64(newVal*10) / 1024)
+	}
+	return sensors[idx], nil
+}
+
+func SensorValue(idx int) float64 {
+	return sensors[idx]
 }

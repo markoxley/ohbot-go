@@ -2,7 +2,6 @@ package ohbot
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/beevik/etree"
@@ -69,7 +68,6 @@ func loadMotorDefs() error {
 		motors[index].rev = rev
 		motors[index].idx = index
 	}
-	log.Println("Motor defs loaded")
 	return nil
 }
 
@@ -91,6 +89,5 @@ func (m *motor) detach() {
 func (m *motor) absPos(p float64) uint16 {
 	mr := m.max - m.min
 	sp := (mr / 10) * p
-	log.Printf("p = %f, m.max = %f, m.min = %f, mr = %f, s = %f, r = %f", p, m.max, m.min, mr, sp, (sp + m.min))
 	return uint16(sp + m.min)
 }

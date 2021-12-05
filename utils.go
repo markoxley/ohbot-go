@@ -17,32 +17,21 @@ const (
 )
 
 var (
-	sensors          []float64
-	shapeList        []float64
-	port             string
-	writing          bool
-	connected        bool
-	topLipFree       bool
-	silenceFile      string
-	synthesizer      string
-	voice            string
-	language         string
-	speechRate       float64
-	lastfex, lastfey float64
-	ser              io.ReadWriteCloser
-	workingDir       string
-	speechAudioPath  string
-	settingsPath     string
-	phonemesPath     string
-	pathSep          string
-	speechAudioFile  string
-	soundFolder      string
-	settingsFile     string
-	phonemesFile     string
+	sensors []float64
+	//shapeList       []float64
+	port            string
+	writing         bool
+	connected       bool
+	topLipFree      bool
+	ser             io.ReadWriteCloser
+	workingDir      string
+	pathSep         string
+	speechAudioFile string
+	settingsFile    string
+	phonemesFile    string
 )
 
 func init() {
-	language = "en-GB"
 	ohbotMotorDefFile = "ohbotData/MotorDefinitionsv21.omd"
 	sensors = []float64{0, 0, 0, 0, 0, 0, 0, 0}
 	for i := uint8(0); i <= uint8(MouthOpen); i++ {
@@ -59,6 +48,7 @@ func init() {
 	if !strings.HasSuffix(workingDir, pathSep) {
 		workingDir += pathSep
 	}
+	workingDir += "ohbotData/"
 	//workingDir += dirName
 	err = os.Mkdir(workingDir, os.ModePerm)
 	if err != nil && !os.IsExist(err) {
@@ -66,7 +56,6 @@ func init() {
 	}
 
 	speechAudioFile = workingDir + "ohbotspeech.wav"
-	soundFolder = workingDir + "Sounds"
 	settingsFile = workingDir + "OhbotSettings.xml"
 	phonemesFile = workingDir + "phonemes"
 	//settingsFile = workingDir + settingsFile
@@ -86,16 +75,93 @@ func init() {
 		log.Fatalf("Unable to create ohbot motor definition file. %s", err.Error())
 	}
 
-	// Maybe add sound option here
-
-	if synthesizer == "" {
-		synthesizer = "festival"
+	phenomeTop = map[string]float64{
+		"p":  5,
+		"b":  5,
+		"m":  5,
+		"ae": 7,
+		"ax": 7,
+		"ah": 7,
+		"aw": 10,
+		"aa": 10,
+		"ao": 10,
+		"ow": 10,
+		"ey": 7,
+		"eh": 7,
+		"uh": 7,
+		"ay": 7,
+		"h":  7,
+		"er": 8,
+		"r":  8,
+		"l":  8,
+		"y":  6,
+		"iy": 6,
+		"ih": 6,
+		"ix": 6,
+		"w":  6,
+		"uw": 6,
+		"oy": 6,
+		"s":  5,
+		"z":  5,
+		"sh": 5,
+		"ch": 5,
+		"jh": 5,
+		"zh": 5,
+		"th": 5,
+		"dh": 5,
+		"d":  5,
+		"t":  5,
+		"n":  5,
+		"k":  5,
+		"g":  5,
+		"ng": 5,
+		"f":  6,
+		"v":  6,
 	}
 
-	speechRate = 170
-
-	lastfex = 5
-	lastfey = 5
+	phenomeBottom = map[string]float64{
+		"p":  5,
+		"b":  5,
+		"m":  5,
+		"ae": 8,
+		"ax": 8,
+		"ah": 8,
+		"aw": 5,
+		"aa": 10,
+		"ao": 10,
+		"ow": 10,
+		"ey": 7,
+		"eh": 7,
+		"uh": 7,
+		"ay": 7,
+		"h":  7,
+		"er": 8,
+		"r":  8,
+		"l":  8,
+		"y":  6,
+		"iy": 6,
+		"ih": 6,
+		"ix": 6,
+		"w":  6,
+		"uw": 6,
+		"oy": 6,
+		"s":  6,
+		"z":  6,
+		"sh": 6,
+		"ch": 6,
+		"jh": 6,
+		"zh": 6,
+		"th": 6,
+		"dh": 6,
+		"d":  6,
+		"t":  6,
+		"n":  6,
+		"k":  6,
+		"g":  6,
+		"ng": 6,
+		"f":  5,
+		"v":  5,
+	}
 }
 
 func testFile(fp, cnt string) error {
@@ -131,12 +197,6 @@ func loadSettings() error {
 	for _, element := range root.SelectElements("Setting") {
 		value := element.SelectAttrValue("Value", "")
 		switch element.SelectAttrValue("Name", "") {
-		case "DefaultSpeechSynth":
-			synthesizer = value
-		case "DefaultVoice":
-			voice = value
-		case "DefaultLang":
-			language = value
 		case "SpeechDBFile":
 			speechDatabaseFile = workingDir + value
 		case "MotorDefFile":
@@ -167,12 +227,20 @@ func listSerialPorts() ([]string, error) {
 	return res, nil
 }
 
-func limit(v float64) float64 {
-	if v > 10 {
-		return 10
+func limit(v float64, l ...float64) float64 {
+	mn := float64(0)
+	mx := float64(10)
+	if len(l) > 0 {
+		mn = l[0]
 	}
-	if v < 0 {
-		return 0
+	if len(l) > 1 {
+		mx = l[1]
+	}
+	if v > mx {
+		return mx
+	}
+	if v < mn {
+		return mn
 	}
 	return v
 }
@@ -184,5 +252,4 @@ func serWrite(s string) {
 	writing = true
 	ser.Write([]byte(s))
 	writing = false
-
 }

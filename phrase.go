@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type phrase struct {
@@ -26,6 +27,8 @@ type SpeechConfig struct {
 
 var (
 	phraseList         []*phrase
+	phenomeTop         map[string]float64
+	phenomeBottom      map[string]float64
 	speechDatabaseFile string
 )
 
@@ -66,37 +69,61 @@ func loadSpeechDatabase() {
 
 func generateSpeechFile(text string) error {
 	// Note: This does not support gTTs
-	log.Printf("Using %v for synth", synthesizer)
 	re := regexp.MustCompile(`(?m)[^ .a-zA-Z0-9?\']`)
 	st := re.ReplaceAllString(text, "")
 	var bc string
 	var args []string
-	if strings.ToUpper(synthesizer) == "FESTIVAL" {
-		bc = "festival"
-		args = []string{
-			"-b",
-			fmt.Sprintf("'(set! mytext (Utterance Text \"%s\"))'", st),
-			"'(utt.synth mytext)'",
-			fmt.Sprintf("'(utt.save.wave mytext \"%s\")'", speechAudioFile),
-			fmt.Sprintf("'(utt.save.segs mytext \"%s\")'", phonemesFile),
-		}
-		//bc = fmt.Sprintf("festival -b '(set! mytext (Utterance text \"%s\"))' '(utt.synth mytext)' '(utt.save.wave mytext \"%s\")' '(utt.save.segs mytext \"ohbotData/phonemes\")'", st, speechAudioFile)
-	} else {
-		bc = synthesizer
-		args = []string{
-			"-w",
-			speechAudioFile,
-			voice,
-			st,
-		}
-		//		bc = fmt.Sprintf("%s -w %s %s \"%s\"", synthesizer, speechAudioFile, voice, st)
+	bc = "/usr/bin/festival"
+	args = []string{
+		"-b",
+		fmt.Sprintf("(set! mytext (Utterance Text \"%s\"))", st),
+		"(utt.synth mytext)",
+		fmt.Sprintf("(utt.save.wave mytext \"%s\")", speechAudioFile),
+		fmt.Sprintf("(utt.save.segs mytext \"%s\")", phonemesFile),
 	}
-	bc = bc + " " + strings.Join(args, " ")
-	log.Println(bc)
-	cmd := exec.Command(bc)
+
+	cmd := exec.Command(bc, args...)
 	if err := cmd.Run(); err != nil {
-		log.Printf("Error: %s", err.Error())
 		return err
 	}
 	return nil
+}
+
+func playSpeech() {
+	PlaySoundFile(speechAudioFile)
+}
+
+func moveSpeech(ph []string, tm []float64) {
+	startTime := time.Now()
+	timeNow := float64(0)
+	totalTime := tm[len(tm)-1]
+	currentX := -1
+	for timeNow < totalTime {
+		timeNow = float64(time.Since(startTime).Seconds())
+		for i, t := range tm {
+			if timeNow > t && i > currentX {
+				currentX = i
+				phenome := strings.TrimSpace(ph[i])
+
+				posTop, posBottom := getPhenome(phenome)
+				Move(TopLip, posTop, 10)
+				Move(BottomLip, posBottom, 10)
+
+			}
+		}
+	}
+	Move(TopLip, 5)
+	Move(BottomLip, 5)
+}
+
+func getPhenome(ph string) (float64, float64) {
+	t := float64(5)
+	b := float64(5)
+	if v, ok := phenomeTop[ph]; ok {
+		t = v
+	}
+	if v, ok := phenomeBottom[ph]; ok {
+		b = v
+	}
+	return t, b
 }
