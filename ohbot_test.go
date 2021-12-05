@@ -132,7 +132,7 @@ func TestWakeup(t *testing.T) {
 func TestSpeak(t *testing.T) {
 	startTest()
 	Wait(1)
-	Say("Hello World!", nil)
+	Say("Hello Daisy May!", nil)
 	endTest()
 }
 

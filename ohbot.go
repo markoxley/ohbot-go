@@ -299,6 +299,20 @@ func Wait(s float64) {
 	time.Sleep(time.Millisecond * time.Duration(s*1000))
 }
 
+func BotVersion() ([]byte, error) {
+	msg := "v\n"
+	_, err := ser.Write([]byte(msg))
+	if err != nil {
+		return nil, err
+	}
+	buf := make([]byte, 256)
+	n, err := ser.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
 func ReadSensor(idx int) (float64, error) {
 	msg := fmt.Sprintf("i0%d\n", idx)
 	_, err := ser.Write([]byte(msg))

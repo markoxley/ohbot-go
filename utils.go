@@ -229,7 +229,7 @@ func listSerialPorts() ([]string, error) {
 
 func limit(v float64, l ...float64) float64 {
 	mn := float64(0)
-	mx := float64(10)
+	mx := float64(9)
 	if len(l) > 0 {
 		mn = l[0]
 	}
