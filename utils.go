@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/beevik/etree"
 )
@@ -32,6 +34,7 @@ var (
 )
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	ohbotMotorDefFile = "ohbotData/MotorDefinitionsv21.omd"
 	sensors = []float64{0, 0, 0, 0, 0, 0, 0, 0}
 	for i := uint8(0); i <= uint8(MouthOpen); i++ {

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,9 @@ var (
 	phenomeTop         map[string]float64
 	phenomeBottom      map[string]float64
 	speechDatabaseFile string
+	speechMutex        sync.Mutex
+	speaking           int
+	textToSpeak        []string
 )
 
 func NewSpeechConfig() *SpeechConfig {
@@ -46,6 +50,24 @@ func newPhrase(set, variable, text string) *phrase {
 		variable: variable,
 		text:     text,
 	}
+}
+
+func IsSpeaking() bool {
+	speechMutex.Lock()
+	defer speechMutex.Unlock()
+	return speaking > 0
+}
+
+func startSpeaking() {
+	speechMutex.Lock()
+	defer speechMutex.Unlock()
+	speaking++
+}
+
+func endSpeaking() {
+	speechMutex.Lock()
+	defer speechMutex.Unlock()
+	speaking--
 }
 
 func loadSpeechDatabase() {

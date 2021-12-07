@@ -1,8 +1,6 @@
 package ohbot
 
 import (
-	"log"
-	"os"
 	"testing"
 	"time"
 )
@@ -20,7 +18,7 @@ func motorTest(mn ...MotorName) {
 }
 
 func endTest() {
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second)
 	Reset()
 }
 
@@ -43,38 +41,38 @@ func TestReset(t *testing.T) {
 	Reset()
 }
 
-// func TestClose(t *testing.T) {
-// 	Init("")
-// 	Close()
-// }
-// func TestEyeTurn(t *testing.T) {
-// 	startTest()
-// 	motorTest(EyeTurn)
-// 	endTest()
-// }
-// func TestEyeTilt(t *testing.T) {
-// 	startTest()
-// 	motorTest(EyeTilt)
-// 	endTest()
-// }
+func TestClose(t *testing.T) {
+	Init("")
+	Close()
+}
+func TestEyeTurn(t *testing.T) {
+	startTest()
+	motorTest(EyeTurn)
+	endTest()
+}
+func TestEyeTilt(t *testing.T) {
+	startTest()
+	motorTest(EyeTilt)
+	endTest()
+}
 
-// func TestLidBlink(t *testing.T) {
-// 	startTest()
-// 	motorTest(LidBlink)
-// 	endTest()
-// }
+func TestLidBlink(t *testing.T) {
+	startTest()
+	motorTest(LidBlink)
+	endTest()
+}
 
-// func TestHeadTurn(t *testing.T) {
-// 	startTest()
-// 	motorTest(HeadTurn)
-// 	endTest()
-// }
+func TestHeadTurn(t *testing.T) {
+	startTest()
+	motorTest(HeadTurn)
+	endTest()
+}
 
-// func TestHeadNod(t *testing.T) {
-// 	startTest()
-// 	motorTest(HeadNod)
-// 	endTest()
-// }
+func TestHeadNod(t *testing.T) {
+	startTest()
+	motorTest(HeadNod)
+	endTest()
+}
 
 func TestSmile(t *testing.T) {
 	startTest()
@@ -82,65 +80,66 @@ func TestSmile(t *testing.T) {
 	endTest()
 }
 
-// func TestSurprise(t *testing.T) {
-// 	startTest()
-// 	Surprise()
-// 	endTest()
-// }
-
-// func TestFrown(t *testing.T) {
-// 	startTest()
-// 	Frown()
-// 	endTest()
-// }
-
-// func TestSleep(t *testing.T) {
-// 	startTest()
-// 	Sleep()
-// 	endTest()
-// }
-
-func TestExpressions(t *testing.T) {
+func TestSurprise(t *testing.T) {
 	startTest()
-	Smile()
-	time.Sleep(time.Second)
-	Frown()
-	time.Sleep(time.Second)
 	Surprise()
-	time.Sleep(time.Second)
+	endTest()
+}
+
+func TestFrown(t *testing.T) {
+	startTest()
+	Frown()
+	endTest()
+}
+
+func TestSleep(t *testing.T) {
+	startTest()
 	Sleep()
+	time.Sleep(time.Second * 2)
+	Wakeup()
+	endTest()
+}
+
+func TestRotate(t *testing.T) {
+	startTest()
+	Say("Just going to stretch my neck", nil)
+	for i := 0; i < 3; i++ {
+		Move(HeadTurn, 0, 2)
+		Move(HeadNod, 0, 2)
+		Wait(.65)
+		Move(HeadNod, 10, 2)
+		Wait(.65)
+		Move(HeadTurn, 10, 2)
+		Wait(.65)
+		Move(HeadNod, 0, 2)
+		Wait(.65)
+	}
+	Move(HeadTurn, 5)
+	Move(HeadNod, 5)
+	Wait(.5)
+
+	endTest()
+}
+
+func TestSayDate(t *testing.T) {
+	startTest()
+	SayDate()
+	SayDay()
+	SayTime()
 	endTest()
 }
 
 func TestSpeech(t *testing.T) {
 	startTest()
-	s := os.Getenv("PATH")
-	log.Printf("PATH = %s", s)
-	log.Println("TEST")
-	Say("Hello, my name is Mark and I am a programmer", nil)
+	sc := NewSpeechConfig()
+	sc.UntilDone = false
+	Say("Hello, my name is Alfred.", sc)
+	Move(HeadNod, 0)
+	Wait(0.5)
+	Move(HeadNod, 5)
+	for IsSpeaking() {
+		time.Sleep(time.Microsecond)
+	}
+	Say("I am alive and I am ready to party!", nil)
 	endTest()
-}
-
-func TestWakeup(t *testing.T) {
-	startTest()
-	Sleep()
-	time.Sleep(time.Second)
-	Wakeup()
-	endTest()
-}
-
-func TestSpeak(t *testing.T) {
-	startTest()
-	Wait(1)
-	Say("Hello Daisy May!", nil)
-	endTest()
-}
-
-func TestLips(t *testing.T) {
-	startTest()
-	Move(TopLip, 0, 10)
-	Move(BottomLip, 0, 10)
-	Wait(1)
-	endTest()
-
 }

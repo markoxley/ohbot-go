@@ -81,7 +81,7 @@ func Init(portName string) error {
 
 	// Load the speech database
 	loadSpeechDatabase()
-
+	//go autoBlink()
 	return nil
 }
 
@@ -118,11 +118,12 @@ func CheckPort(p string) bool {
 //  @return error
 func PlaySoundFile(fp string) error {
 	cmd := exec.Command("aplay", fp)
-	err := cmd.Start()
+	err := cmd.Run()
 	if err != nil {
 		return err
 	}
-	return cmd.Wait()
+	return nil
+	//return cmd.Wait()
 }
 
 // Move moves the specified servo
@@ -179,6 +180,7 @@ func Detach(mn MotorName) {
 //  @param text is the text to speak
 //  @param sc optional additional configuration
 func Say(text string, sc *SpeechConfig) {
+	startSpeaking()
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return
@@ -233,6 +235,7 @@ func Say(text string, sc *SpeechConfig) {
 			go func() {
 				time.Sleep(time.Second * time.Duration(sc.SoundDelay))
 				playSpeech()
+				endSpeaking()
 				if wg != nil {
 					wg.Done()
 				}
@@ -244,6 +247,7 @@ func Say(text string, sc *SpeechConfig) {
 			}
 			go func() {
 				playSpeech()
+				endSpeaking()
 				if wg != nil {
 					wg.Done()
 				}
@@ -263,6 +267,7 @@ func Say(text string, sc *SpeechConfig) {
 		}
 		go func() {
 			playSpeech()
+			endSpeaking()
 			if wg != nil {
 				wg.Done()
 			}
@@ -280,7 +285,7 @@ func Reset() {
 			continue
 		}
 		Move(MotorName(m.idx), 5)
-		time.Sleep(time.Millisecond * 250)
+		//time.Sleep(time.Millisecond * 100)
 	}
 	Move(MotorName(TopLip), 5)
 	Move(MotorName(BottomLip), 5)
